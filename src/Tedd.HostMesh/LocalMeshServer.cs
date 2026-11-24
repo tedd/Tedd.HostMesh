@@ -43,6 +43,12 @@ public static class LocalMeshServer
                     case 1:
                         await Serve(await application.ConnectAsync(ep, ct));
                         break;
+                    case 5:
+                        application.AuthorizeIngress(ep);
+                        byte[] source = new byte[EndpointCodec.Size];
+                        await stream.ReadExactlyAsync(source, timeout.Token);
+                        await Serve(await application.ConnectFromAsync(ep, EndpointCodec.Read(source), ct));
+                        break;
                     case 2:
                         await using (var registration = application.Listen(ep.Port, allowedMeshSources))
                         {

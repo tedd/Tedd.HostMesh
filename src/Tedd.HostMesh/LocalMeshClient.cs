@@ -29,7 +29,7 @@ public sealed class LocalMeshClient
         }
     };
 
-    private async Task<Socket> Open(byte operation, IPEndPoint endpoint, CancellationToken token)
+    private async Task<Socket> Open(byte operation, IPEndPoint endpoint, CancellationToken token, IPEndPoint? origin = null)
     {
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
@@ -42,6 +42,12 @@ public sealed class LocalMeshClient
             header[33] = operation;
             EndpointCodec.Write(header.AsSpan(34), endpoint);
             await stream.WriteAsync(header, token);
+            if (origin != null)
+            {
+                byte[] source = new byte[EndpointCodec.Size];
+                EndpointCodec.Write(source, origin);
+                await stream.WriteAsync(source, token);
+            }
             var ack = new byte[1];
             await stream.ReadExactlyAsync(ack, token);
             if (ack[0] != 1) throw new IOException("Local mesh request refused.");
@@ -53,9 +59,16 @@ public sealed class LocalMeshClient
     public async Task<LocalMeshConnection> ConnectAsync(IPEndPoint destination, CancellationToken cancellationToken = default) =>
         await OpenConnection(1, destination, cancellationToken);
 
-    internal async Task<LocalMeshConnection> OpenConnection(byte operation, IPEndPoint endpoint, CancellationToken token)
+    /// <summary>A trusted forwarding application can attest the original endpoint when opening a new stream.</summary>
+    public Task<LocalMeshConnection> ConnectFromAsync(IPEndPoint destination, IPEndPoint origin, CancellationToken token = default)
     {
-        var socket = await Open(operation, endpoint, token);
+        ArgumentNullException.ThrowIfNull(origin);
+        return OpenConnection(5, destination, token, origin);
+    }
+
+    internal async Task<LocalMeshConnection> OpenConnection(byte operation, IPEndPoint endpoint, CancellationToken token, IPEndPoint? origin = null)
+    {
+        var socket = await Open(operation, endpoint, token, origin);
         try
         {
             using var stream = new NetworkStream(socket, false);

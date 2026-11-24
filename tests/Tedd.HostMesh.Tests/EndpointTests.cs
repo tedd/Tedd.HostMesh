@@ -48,6 +48,33 @@ public sealed class EndpointTests(Identities keys) : IClassFixture<Identities>
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await listener.AcceptAsync(deadline.Token));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LocalForwarderRequiresTrustedOriginGrant(bool trusted)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var pair = new Pair();
+        await pair.Start(keys);
+        var source = (trusted ? pair.A : pair.B).Register("app");
+        var destination = (trusted ? pair.B : pair.A).Register("app");
+        await using var listener = destination.Listen(8054, Identities.Prefix);
+        var path = Path.Combine(Path.GetTempPath(), "m-" + Guid.NewGuid().ToString("N")[..8]);
+        var key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        await using var bridge = LocalMeshServer.Listen(source, path, key, Identities.Prefix);
+        var app = new LocalMeshClient(path, key);
+        var original = IPEndPoint.Parse("203.0.113.42:4485");
+        var target = new IPEndPoint(destination.Address, 8054);
+        if (trusted)
+        {
+            using var client = await app.ConnectFromAsync(target, original, deadline.Token);
+            await using var accepted = await listener.AcceptAsync(deadline.Token);
+            Assert.Equal(original, accepted.Peer.EffectiveEndPoint);
+            Assert.Equal(source.Address, accepted.Peer.MeshEndPoint.Address);
+        }
+        else await Assert.ThrowsAnyAsync<IOException>(() => app.ConnectFromAsync(target, original, deadline.Token));
+    }
+
     [Fact] public async Task FragmentedUdpFlowsKeepIndependentPhysicalReplySockets()
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12)); var ct = timeout.Token;
