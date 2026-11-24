@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Tedd.Quicly.Transport.MsQuic" Version="0.2.2" />
+    <InternalsVisibleTo Include="Tedd.HostMesh.Tests" />
+  </ItemGroup>
+</Project>

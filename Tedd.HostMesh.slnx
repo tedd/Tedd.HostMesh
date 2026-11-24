@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/Tedd.HostMesh/Tedd.HostMesh.csproj" />
+  <Project Path="src/Tedd.HostMesh.AspNetCore/Tedd.HostMesh.AspNetCore.csproj" />
+  <Project Path="src/Tedd.HostMesh.Agent/Tedd.HostMesh.Agent.csproj" />
+  <Project Path="tests/Tedd.HostMesh.Tests/Tedd.HostMesh.Tests.csproj" />
+</Solution>

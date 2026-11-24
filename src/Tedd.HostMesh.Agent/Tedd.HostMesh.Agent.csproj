@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><InternalsVisibleTo Include="Tedd.HostMesh.Tests" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../Tedd.HostMesh/Tedd.HostMesh.csproj" /></ItemGroup>
+</Project>
