@@ -1,0 +1,45 @@
+{
+  "node": 2,
+  "privateKey": "service.pfx",
+  "stateDirectory": "service-state",
+  "dial": [
+    {
+      "node": 1,
+      "address": "127.0.0.1:7300"
+    }
+  ],
+  "members": [
+    {
+      "id": 1,
+      "certificate": "edge.cer",
+      "addresses": [
+        "10.84.1.10"
+      ],
+      "ingress": true
+    },
+    {
+      "id": 2,
+      "certificate": "service.cer",
+      "addresses": [
+        "10.84.2.10"
+      ]
+    }
+  ],
+  "applications": [
+    {
+      "name": "service",
+      "address": "10.84.2.10",
+      "connect": [],
+      "forwards": [
+        {
+          "mode": "tcp-target",
+          "bind": "443",
+          "target": "127.0.0.1:9443",
+          "allow": [
+            "10.84.1.10/32"
+          ]
+        }
+      ]
+    }
+  ]
+}

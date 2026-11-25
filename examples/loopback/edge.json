@@ -1,0 +1,50 @@
+{
+  "node": 1,
+  "privateKey": "edge.pfx",
+  "stateDirectory": "edge-state",
+  "listen": "127.0.0.1:7300",
+  "acceptFrom": [
+    2
+  ],
+  "dial": [],
+  "members": [
+    {
+      "id": 1,
+      "certificate": "edge.cer",
+      "addresses": [
+        "10.84.1.10"
+      ],
+      "ingress": true
+    },
+    {
+      "id": 2,
+      "certificate": "service.cer",
+      "addresses": [
+        "10.84.2.10"
+      ]
+    }
+  ],
+  "applications": [
+    {
+      "name": "edge",
+      "address": "10.84.1.10",
+      "connect": [
+        {
+          "network": "10.84.2.10/32",
+          "port": 443
+        }
+      ],
+      "reportOrigin": true,
+      "forwards": [
+        {
+          "mode": "tcp-ingress",
+          "bind": "127.0.0.1:8443",
+          "target": "10.84.2.10:443",
+          "allow": [
+            "127.0.0.0/8"
+          ]
+        }
+      ]
+    }
+  ]
+}

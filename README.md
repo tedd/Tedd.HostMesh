@@ -2,6 +2,56 @@
 
 Tedd.HostMesh connects .NET applications and TCP/UDP services over a private, routed network. Each host runs an agent. An application uses its own mesh IP and port through the SDK, or connects through a socket forward. A host behind NAT can initiate a connection to a relay and receive traffic over the same connection.
 
+[Project website](https://tedd.no/Tedd.HostMesh/) · [Two-agent quickstart](#run-two-agents-on-loopback) · [.NET integration](#connect-a-net-application)
+
+Use socket forwards to connect an existing service, or give a .NET application a mesh listener through the SDK. The mesh IP belongs to an application registered with an agent. A regular TCP client connects to the ingress socket on its host.
+
+| Integration | Application entry point |
+| --- | --- |
+| Existing TCP or UDP service | A local ingress socket and a target forward at the backend |
+| .NET application | `LocalMeshClient` over an authenticated local socket |
+| ASP.NET Core or outbound HTTP | A Kestrel mesh listener or an `HttpClient` mesh handler |
+
+## Run two agents on loopback
+
+Use PowerShell 7, the .NET 10 SDK or later, a .NET 10 runtime with MsQuic support, and Python 3 for the sample HTTP backend. The example uses TCP ports 8443 and 9443 and UDP port 7300 on loopback. Start in the repository root.
+
+```powershell
+dotnet build Tedd.HostMesh.slnx
+$demo = Join-Path ([System.IO.Path]::GetTempPath()) ("hostmesh-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $demo | Out-Null
+Copy-Item examples/loopback/*.json $demo
+$env:HOSTMESH_CERT_PASSWORD = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$agent = (Resolve-Path src/Tedd.HostMesh.Agent/bin/Debug/net10.0/Tedd.HostMesh.Agent.dll).Path
+dotnet $agent identity edge $demo
+dotnet $agent identity service $demo
+```
+
+Start a backend serving a single text file. Keep its document root separate from the certificates.
+
+```powershell
+$www = New-Item -ItemType Directory -Path (Join-Path $demo www)
+Set-Content (Join-Path $www mesh.txt) 'Hello from Service'
+$backend = Start-Process python -ArgumentList @('-m','http.server','9443','--bind','127.0.0.1') -WorkingDirectory $www.FullName -PassThru
+```
+
+From the same PowerShell window on Windows, launch the agents in separate consoles so each inherits the certificate password.
+
+```powershell
+$edge = Start-Process dotnet -ArgumentList @("`"$agent`"",'run','edge.json') -WorkingDirectory $demo -PassThru
+$service = Start-Process dotnet -ArgumentList @("`"$agent`"",'run','service.json') -WorkingDirectory $demo -PassThru
+```
+
+Enter `status` in Edge’s console. Once its `routes` table shows node 2, make a request from the original shell.
+
+```powershell
+(Invoke-RestMethod http://127.0.0.1:8443/mesh.txt).Trim()
+```
+
+The expected response is `Hello from Service`. Edge accepts the TCP connection on port 8443 and opens a mesh stream to `10.84.2.10:443`. Service maps mesh port 443 to the HTTP backend at `127.0.0.1:9443`. Service initiates the QUIC link to Edge. Check the agent routes if the first request arrives before convergence. Enter `stop` in each agent console, then run `Stop-Process -Id $backend.Id`. The disposable directory in `$demo` contains both private keys. Remove it after the agents exit.
+
+On Linux, run the backend and the two `dotnet <agent.dll> run <absolute-config-path>` commands in separate terminals. Supply the identity password in each agent’s environment. For deployment across hosts, provision each identity on its owner, distribute the public certificates, and replace the Edge listener and Service dial address with a reachable UDP endpoint.
+
 ## Routing and continuity
 
 Neighbor agents exchange authenticated QUIC datagrams using Tedd.Quicly. Each node advertises its directed links and capacity, verifies signed link-state updates, and independently computes the next hop. Forwarding requires both neighbors to report the adjacency. A relay must have the relay role in the membership configuration.
@@ -27,7 +77,6 @@ Generate a separate identity on each host. Set `HOSTMESH_CERT_PASSWORD` in the a
 
 ```powershell
 dotnet run --project src/Tedd.HostMesh.Agent -- identity edge .
-dotnet run --project src/Tedd.HostMesh.Agent -- run edge.json
 ```
 
 This two-node example exposes a local TCP port on Edge and forwards it to a mesh listener on Service. Paths are relative to the node configuration. Both nodes need the same member identities and address grants.
@@ -56,7 +105,7 @@ This two-node example exposes a local TCP port on Edge and forwards it to a mesh
 }
 ```
 
-For additional permitted direct peers, include their node IDs in `discover` and a reachable UDP `endpoint` on their member entries. The agent attempts those adjacencies independently of its explicit `dial` seeds. Outbound-only nodes can leave their member endpoint unset.
+For complete configurations and startup commands, see the [loopback example](examples/loopback) and the [quickstart](#run-two-agents-on-loopback). For additional permitted direct peers, include their node IDs in `discover` and a reachable UDP `endpoint` on their member entries. The agent attempts those adjacencies independently of its explicit `dial` seeds. Outbound-only nodes can leave their member endpoint unset.
 
 On Service, generate `service.pfx` and `service.cer` using the identity command. Set `node` to `2`, `privateKey` to `service.pfx`, and use its own state directory. Omit `listen`, set `acceptFrom` to `[]`, and configure `dial` with Edge's reachable UDP endpoint. Use this application entry for a physical backend.
 
